@@ -223,6 +223,17 @@ import com.valentinilk.shimmer.LocalShimmerTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
+import androidx.compose.runtime.snapshotFlow
+import android.app.SearchManager
+import android.provider.MediaStore
+import android.widget.Toast
+import com.music.innertube.models.filterExplicit
+import com.music.innertube.models.filterVideoSongs
+import com.music.vivi.constants.HideExplicitKey
+import com.music.vivi.constants.HideVideoSongsKey
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -243,6 +254,13 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val ACTION_SEARCH = "com.music.vivi.action.SEARCH"
         private const val ACTION_LIBRARY = "com.music.vivi.action.LIBRARY"
+
+        /** Public: open search for extra `query` and play the first song (see [handleExternalSearch]). */
+        const val ACTION_PLAY_FROM_SEARCH = "com.music.vivi.action.PLAY_FROM_SEARCH"
+
+        /** Public: open search for extra `query` only. */
+        const val ACTION_SEARCH_QUERY = "com.music.vivi.action.SEARCH_QUERY"
+        private const val PLAYER_WAIT_MS = 10_000L
     }
 
     @Inject
@@ -1412,7 +1430,66 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Search requests from other apps (voice assistants, the X7 car launcher): [ACTION_SEARCH_QUERY] opens the search screen
+     * for the extra `query` ([SearchManager.QUERY]); [ACTION_PLAY_FROM_SEARCH] and [MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH]
+     * also play the first song YouTube Music finds, followed by its radio. Returns false for any other intent.
+     *
+     * The intent is marked as handled (action cleared): a new intent reaches [handleDeepLinkIntent] twice, from
+     * [onNewIntent] and from the new-intent listener.
+     */
+    private fun handleExternalSearch(intent: Intent, navController: NavHostController): Boolean {
+        val action = intent.action
+        val play = action == ACTION_PLAY_FROM_SEARCH || action == MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH
+        if (!play && action != ACTION_SEARCH_QUERY) return false
+        val query = intent.getStringExtra(SearchManager.QUERY)?.trim().orEmpty()
+        intent.action = null
+        intent.removeExtra(SearchManager.QUERY)
+        Timber.tag("ExternalSearch").i("action=$action query=\"$query\"")
+        if (query.isEmpty()) {
+            // "Play some music" with no query: carry on with what is queued.
+            if (play) playerConnection?.player?.play()
+            return true
+        }
+        navController.navigate("search/${URLEncoder.encode(query, "UTF-8")}")
+        if (dataStore[PauseSearchHistoryKey] != true) {
+            lifecycleScope.launch(Dispatchers.IO) { database.query { insert(SearchHistory(query = query)) } }
+        }
+        if (!play) return true
+        lifecycleScope.launch(Dispatchers.IO) {
+            val song = YouTube.search(query, YouTube.SearchFilter.FILTER_SONG)
+                .onFailure { Timber.tag("ExternalSearch").w(it, "search failed") }
+                .getOrNull()?.items
+                ?.filterIsInstance<SongItem>()
+                ?.filterExplicit(dataStore.get(HideExplicitKey, false))
+                ?.filterVideoSongs(dataStore.get(HideVideoSongsKey, false))
+                ?.firstOrNull()
+            if (song == null) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, R.string.no_results_found, Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
+            val metadata = song.toMediaMetadata()
+            database.query { insert(metadata) }
+            // On a cold start the music service is bound a moment after the screen is up.
+            val connection = withTimeoutOrNull(PLAYER_WAIT_MS) {
+                snapshotFlow { playerConnection }.filterNotNull().first()
+            }
+            withContext(Dispatchers.Main) {
+                if (connection == null) {
+                    Timber.tag("ExternalSearch").w("player not connected; \"${song.title}\" not started")
+                    return@withContext
+                }
+                Timber.tag("ExternalSearch").i("playing ${song.id} \"${song.title}\"")
+                connection.playQueue(YouTubeQueue(WatchEndpoint(videoId = song.id), metadata))
+            }
+        }
+        return true
+    }
+
     private fun handleDeepLinkIntent(intent: Intent, navController: NavHostController) {
+        if (handleExternalSearch(intent, navController)) return
         val uri = intent.data ?: intent.extras?.getString(Intent.EXTRA_TEXT)?.toUri() ?: return
         intent.data = null
         intent.removeExtra(Intent.EXTRA_TEXT)

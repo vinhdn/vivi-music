@@ -90,6 +90,19 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
 
+            <!--
+                Voice assistants and other apps (e.g. the X7 car launcher): open the search screen for the extra "query"
+                (SearchManager.QUERY); PLAY_FROM_SEARCH and the standard MEDIA_PLAY_FROM_SEARCH also play the first song found.
+                The YouTube filters below carry MEDIA_PLAY_FROM_SEARCH only with a data URI, which a voice intent never has.
+            -->
+            <intent-filter>
+                <action android:name="com.music.vivi.action.PLAY_FROM_SEARCH" />
+                <action android:name="com.music.vivi.action.SEARCH_QUERY" />
+                <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
             <!-- Listen Together invite link (HTTPS App Link - works after APK installation verification) -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
