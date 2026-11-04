@@ -1140,7 +1140,19 @@ class MainActivity : ComponentActivity() {
                                         playerBottomSheetState.collapseSoft()
                                     }
 
-                                    if (isSelected) {
+                                    val onSearchResults = navController.currentDestination?.route
+                                        ?.startsWith("search/") == true
+
+                                    if (screen == Screens.Home && onSearchResults) {
+                                        // Tapping Home while on the search results screen returns to the
+                                        // root Home screen, popping the search screen off the back stack.
+                                        navController.navigate(Screens.Home.route) {
+                                            popUpTo(Screens.Home.route) {
+                                                inclusive = true
+                                            }
+                                            launchSingleTop = true
+                                        }
+                                    } else if (isSelected) {
                                         navController.currentBackStackEntry?.savedStateHandle?.set("scrollToTop", true)
                                         coroutineScope.launch {
                                             topAppBarScrollBehavior.state.resetHeightOffset()
