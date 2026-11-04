@@ -281,6 +281,19 @@
             android:name=".listentogether.ListenTogetherActionReceiver"
             android:exported="false" />
 
+        <!--
+            Search / play requests from other apps without opening a screen (ExternalSearch.kt): the running Vivi UI takes
+            them where it is, e.g. inside the X7 launcher's PIP pane. Ordered broadcast; result 0 = no UI running.
+        -->
+        <receiver
+            android:name=".ExternalSearchReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.music.vivi.action.PLAY_FROM_SEARCH" />
+                <action android:name="com.music.vivi.action.SEARCH_QUERY" />
+            </intent-filter>
+        </receiver>
+
         <receiver
             android:name="androidx.media3.session.MediaButtonReceiver"
             android:exported="true">

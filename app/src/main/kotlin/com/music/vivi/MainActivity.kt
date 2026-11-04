@@ -336,9 +336,11 @@ class MainActivity : ComponentActivity() {
             serviceConnection,
             BIND_AUTO_CREATE
         )
+        ExternalSearch.uiStarted = true
     }
 
     override fun onStop() {
+        ExternalSearch.uiStarted = false
         unbindService(serviceConnection)
         super.onStop()
     }
@@ -978,6 +980,12 @@ class MainActivity : ComponentActivity() {
 
                     addOnNewIntentListener(listener)
                     onDispose { removeOnNewIntentListener(listener) }
+                }
+
+                // Requests from other apps through ExternalSearchReceiver: handled here, in whatever task / display
+                // this activity runs on (a launcher pane), without starting another window.
+                LaunchedEffect(Unit) {
+                    ExternalSearch.requests.collect { handleExternalSearch(it, navController) }
                 }
 
                 val currentTitleRes = remember(navBackStackEntry) {
