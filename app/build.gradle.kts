@@ -28,6 +28,7 @@ android {
         versionCode = 78
         val betaVersionName = project.findProperty("betaVersionName") as String?
         versionName = betaVersionName ?: "6.0.9"
+        versionNameSuffix = "-x7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

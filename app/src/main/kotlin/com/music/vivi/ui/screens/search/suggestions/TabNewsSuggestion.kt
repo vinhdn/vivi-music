@@ -85,7 +85,7 @@ fun SuggestionsTabContent(
     val context = LocalContext.current
     val (regionCode, _) = rememberPreference(
         key = SuggestionRegionKey,
-        defaultValue = "system"
+        defaultValue = "vn"
     )
 
     NetworkReload(

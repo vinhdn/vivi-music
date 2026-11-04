@@ -97,7 +97,7 @@ class App : Application(), SingletonImageLoader.Factory {
         YouTube.locale = YouTubeLocale(
             gl = settings[ContentCountryKey]?.takeIf { it != SYSTEM_DEFAULT && it != "system" }
                 ?: locale.country.takeIf { it in CountryCodeToName }
-                ?: "US",
+                ?: "VN",
             hl = settings[ContentLanguageKey]?.takeIf { it != SYSTEM_DEFAULT && it != "system" }
                 ?: locale.language.takeIf { it in LanguageCodeToName }
                 ?: languageTag.takeIf { it in LanguageCodeToName }
@@ -259,7 +259,7 @@ class App : Application(), SingletonImageLoader.Factory {
                         gl = contentCountry?.takeIf { it != SYSTEM_DEFAULT && it != "system" }
                             ?: effectiveAppLocale.country.takeIf { it in CountryCodeToName }
                             ?: systemLocale.country.takeIf { it in CountryCodeToName }
-                            ?: "US",
+                            ?: "VN",
                         hl = contentLanguage?.takeIf { it != SYSTEM_DEFAULT && it != "system" }
                             ?: effectiveAppLocale.toLanguageTag().takeIf { it in LanguageCodeToName }
                             ?: effectiveAppLocale.language.takeIf { it in LanguageCodeToName }

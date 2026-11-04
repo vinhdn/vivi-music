@@ -71,7 +71,7 @@ class SuggestionsViewModel @Inject constructor(
     init {
         viewModelScope.launch(Dispatchers.IO) {
             context.dataStore.data
-                .map { it[SuggestionRegionKey] ?: "system" }
+                .map { it[SuggestionRegionKey] ?: "vn" }
                 .distinctUntilChanged()
                 .collect { regionCode ->
                     refresh(countryCode = regionCode, force = false)
@@ -89,7 +89,7 @@ class SuggestionsViewModel @Inject constructor(
                             _youtubeNewReleases.value != null
 
                     if (wasOffline || !hasData) {
-                        val regionCode = context.dataStore.data.first()[SuggestionRegionKey] ?: "system"
+                        val regionCode = context.dataStore.data.first()[SuggestionRegionKey] ?: "vn"
                         refresh(countryCode = regionCode, force = true)
                     }
                     wasOffline = false
