@@ -141,6 +141,8 @@ import coil3.request.crossfade
 import coil3.toBitmap
 import com.music.innertube.YouTube
 import com.music.innertube.models.SongItem
+import com.music.innertube.models.AlbumItem
+import com.music.innertube.models.ArtistItem
 import com.music.innertube.models.WatchEndpoint
 import com.music.vivi.constants.AppBarHeight
 import com.music.vivi.constants.AppLanguageKey
@@ -260,6 +262,9 @@ class MainActivity : ComponentActivity() {
 
         /** Public: open search for extra `query` only. */
         const val ACTION_SEARCH_QUERY = "com.music.vivi.action.SEARCH_QUERY"
+
+        /** Public: what to look for, `song` (default), `album` or `artist`. */
+        const val EXTRA_TYPE = "type"
         private const val PLAYER_WAIT_MS = 10_000L
     }
 
@@ -1433,7 +1438,12 @@ class MainActivity : ComponentActivity() {
     /**
      * Search requests from other apps (voice assistants, the X7 car launcher): [ACTION_SEARCH_QUERY] opens the search screen
      * for the extra `query` ([SearchManager.QUERY]); [ACTION_PLAY_FROM_SEARCH] and [MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH]
-     * also play the first song YouTube Music finds, followed by its radio. Returns false for any other intent.
+     * also play the first match. What is looked for is the extra [EXTRA_TYPE] (`song`, `album`, `artist`), or the standard
+     * [MediaStore.EXTRA_MEDIA_FOCUS]; default song:
+     *  - song: the first song, followed by its radio;
+     *  - album: the album page opens and the album plays from its first track;
+     *  - artist: the artist page opens and the artist's songs play (play, else shuffle, else radio endpoint).
+     * Returns false for any other intent.
      *
      * The intent is marked as handled (action cleared): a new intent reaches [handleDeepLinkIntent] twice, from
      * [onNewIntent] and from the new-intent listener.
@@ -1442,10 +1452,17 @@ class MainActivity : ComponentActivity() {
         val action = intent.action
         val play = action == ACTION_PLAY_FROM_SEARCH || action == MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH
         if (!play && action != ACTION_SEARCH_QUERY) return false
-        val query = intent.getStringExtra(SearchManager.QUERY)?.trim().orEmpty()
+        val type = externalSearchType(intent)
+        val query = intent.getStringExtra(SearchManager.QUERY)?.trim().orEmpty().ifEmpty {
+            when (type) {
+                "album" -> intent.getStringExtra(MediaStore.EXTRA_MEDIA_ALBUM)
+                "artist" -> intent.getStringExtra(MediaStore.EXTRA_MEDIA_ARTIST)
+                else -> intent.getStringExtra(MediaStore.EXTRA_MEDIA_TITLE)
+            }?.trim().orEmpty()
+        }
         intent.action = null
         intent.removeExtra(SearchManager.QUERY)
-        Timber.tag("ExternalSearch").i("action=$action query=\"$query\"")
+        Timber.tag("ExternalSearch").i("action=$action type=$type query=\"$query\"")
         if (query.isEmpty()) {
             // "Play some music" with no query: carry on with what is queued.
             if (play) playerConnection?.player?.play()
@@ -1457,35 +1474,84 @@ class MainActivity : ComponentActivity() {
         }
         if (!play) return true
         lifecycleScope.launch(Dispatchers.IO) {
-            val song = YouTube.search(query, YouTube.SearchFilter.FILTER_SONG)
-                .onFailure { Timber.tag("ExternalSearch").w(it, "search failed") }
-                .getOrNull()?.items
-                ?.filterIsInstance<SongItem>()
-                ?.filterExplicit(dataStore.get(HideExplicitKey, false))
-                ?.filterVideoSongs(dataStore.get(HideVideoSongsKey, false))
-                ?.firstOrNull()
-            if (song == null) {
+            val found = when (type) {
+                // Nothing of that kind (a misheard album / artist name): a song search still plays something close.
+                "album" -> findAlbum(query) ?: findSong(query)
+                "artist" -> findArtist(query) ?: findSong(query)
+                else -> findSong(query)
+            }
+            if (found == null) {
                 withContext(Dispatchers.Main) {
                     Toast.makeText(this@MainActivity, R.string.no_results_found, Toast.LENGTH_SHORT).show()
                 }
                 return@launch
             }
-            val metadata = song.toMediaMetadata()
-            database.query { insert(metadata) }
             // On a cold start the music service is bound a moment after the screen is up.
             val connection = withTimeoutOrNull(PLAYER_WAIT_MS) {
                 snapshotFlow { playerConnection }.filterNotNull().first()
             }
             withContext(Dispatchers.Main) {
+                found.route?.let { navController.navigate(it) }
                 if (connection == null) {
-                    Timber.tag("ExternalSearch").w("player not connected; \"${song.title}\" not started")
+                    Timber.tag("ExternalSearch").w("player not connected; \"${found.label}\" not started")
                     return@withContext
                 }
-                Timber.tag("ExternalSearch").i("playing ${song.id} \"${song.title}\"")
-                connection.playQueue(YouTubeQueue(WatchEndpoint(videoId = song.id), metadata))
+                Timber.tag("ExternalSearch").i("playing $type \"${found.label}\"")
+                connection.playQueue(found.queue)
             }
         }
         return true
+    }
+
+    /** What an external search asks for: [EXTRA_TYPE], else the standard media focus; "song" by default. */
+    private fun externalSearchType(intent: Intent): String {
+        intent.getStringExtra(EXTRA_TYPE)?.lowercase()?.let { if (it in setOf("song", "album", "artist")) return it }
+        return when (intent.getStringExtra(MediaStore.EXTRA_MEDIA_FOCUS)) {
+            MediaStore.Audio.Albums.ENTRY_CONTENT_TYPE -> "album"
+            MediaStore.Audio.Artists.ENTRY_CONTENT_TYPE -> "artist"
+            else -> "song"
+        }
+    }
+
+    /** A match of an external search: what to play, the page to show (album / artist) and a name for the log. */
+    private class ExternalMatch(val queue: com.music.vivi.playback.queues.Queue, val route: String?, val label: String)
+
+    private suspend fun findSong(query: String): ExternalMatch? {
+        val song = YouTube.search(query, YouTube.SearchFilter.FILTER_SONG)
+            .onFailure { Timber.tag("ExternalSearch").w(it, "song search failed") }
+            .getOrNull()?.items
+            ?.filterIsInstance<SongItem>()
+            ?.filterExplicit(dataStore.get(HideExplicitKey, false))
+            ?.filterVideoSongs(dataStore.get(HideVideoSongsKey, false))
+            ?.firstOrNull() ?: return null
+        val metadata = song.toMediaMetadata()
+        database.query { insert(metadata) }
+        return ExternalMatch(YouTubeQueue(WatchEndpoint(videoId = song.id), metadata), null, song.title)
+    }
+
+    private suspend fun findAlbum(query: String): ExternalMatch? {
+        val album = YouTube.search(query, YouTube.SearchFilter.FILTER_ALBUM)
+            .onFailure { Timber.tag("ExternalSearch").w(it, "album search failed") }
+            .getOrNull()?.items
+            ?.filterIsInstance<AlbumItem>()
+            ?.filterExplicit(dataStore.get(HideExplicitKey, false))
+            ?.firstOrNull() ?: return null
+        // The album's own playlist, in track order (a playlist-only endpoint starts at its first track).
+        return ExternalMatch(YouTubeQueue(WatchEndpoint(playlistId = album.playlistId)), "album/${album.browseId}", album.title)
+    }
+
+    private suspend fun findArtist(query: String): ExternalMatch? {
+        val artist = YouTube.search(query, YouTube.SearchFilter.FILTER_ARTIST)
+            .onFailure { Timber.tag("ExternalSearch").w(it, "artist search failed") }
+            .getOrNull()?.items
+            ?.filterIsInstance<ArtistItem>()
+            ?.firstOrNull() ?: return null
+        // Search results often carry no endpoints; the artist page has them.
+        val full = if (artist.playEndpoint == null && artist.shuffleEndpoint == null && artist.radioEndpoint == null) {
+            YouTube.artist(artist.id).onFailure { Timber.tag("ExternalSearch").w(it, "artist page failed") }.getOrNull()?.artist
+        } else artist
+        val endpoint = full?.playEndpoint ?: full?.shuffleEndpoint ?: full?.radioEndpoint ?: return null
+        return ExternalMatch(YouTubeQueue(endpoint), "artist/${artist.id}", artist.title)
     }
 
     private fun handleDeepLinkIntent(intent: Intent, navController: NavHostController) {
