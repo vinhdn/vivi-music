@@ -55,6 +55,7 @@ import com.music.vivi.utils.rememberPreference
 import com.music.vivi.viewmodels.AccountSettingsViewModel
 import com.music.vivi.viewmodels.HomeViewModel
 import com.music.vivi.R
+import com.music.vivi.BuildConfig
 private enum class AccountTab {
     RECOMMENDED,
     ALL_SERVICES
@@ -478,7 +479,7 @@ fun AccountSettingsScreen(
                 )
 
                 ExpressiveSettingGroup(
-                    items = listOf(
+                    items = listOfNotNull(
                         Material3SettingsItem(
                             icon = painterResource(R.drawable.token),
                             title = {
@@ -496,11 +497,13 @@ fun AccountSettingsScreen(
                                 else showTokenEditor = true
                             }
                         ),
-                        Material3SettingsItem(
-                            icon = painterResource(R.drawable.integration),
-                            title = { Text(stringResource(R.string.integrations)) },
-                            onClick = { navController.navigate("settings/integrations") }
-                        )
+                        if (BuildConfig.INTEGRATIONS_AVAILABLE) {
+                            Material3SettingsItem(
+                                icon = painterResource(R.drawable.integration),
+                                title = { Text(stringResource(R.string.integrations)) },
+                                onClick = { navController.navigate("settings/integrations") }
+                            )
+                        } else null
                     )
                 )
             }

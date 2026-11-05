@@ -189,7 +189,8 @@ fun SettingsDropdownMenu(
         Spacer(modifier = Modifier.height(4.dp))
 
         // --- Section 1: Account, Sync & Integrations ---
-        val section1Count = if (isLoggedIn) 3 else 2
+        val hasIntegrations = BuildConfig.INTEGRATIONS_AVAILABLE
+        val section1Count = (if (isLoggedIn) 2 else 1) + (if (hasIntegrations) 1 else 0)
         Surface(
             shape = listItemShape(0, section1Count, 16.dp),
             color = itemContainerColor,
@@ -252,16 +253,18 @@ fun SettingsDropdownMenu(
             )
         }
         
-        DropdownMenuIconItem(
-            title = stringResource(R.string.integrations),
-            icon = R.drawable.extension,
-            shape = listItemShape(section1Count - 1, section1Count, 16.dp),
-            containerColor = itemContainerColor,
-            onClick = {
-                onDismissRequest()
-                onNavigate("settings/integrations")
-            }
-        )
+        if (BuildConfig.INTEGRATIONS_AVAILABLE) {
+            DropdownMenuIconItem(
+                title = stringResource(R.string.integrations),
+                icon = R.drawable.extension,
+                shape = listItemShape(section1Count - 1, section1Count, 16.dp),
+                containerColor = itemContainerColor,
+                onClick = {
+                    onDismissRequest()
+                    onNavigate("settings/integrations")
+                }
+            )
+        }
 
 
         Spacer(modifier = Modifier.height(6.dp))

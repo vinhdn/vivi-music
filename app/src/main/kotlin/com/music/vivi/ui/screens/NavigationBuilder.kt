@@ -80,6 +80,7 @@ import com.music.vivi.vivimusic.commitscreen.CommitScreen
 import com.music.vivi.ui.screens.equalizer.axion.AxionEqScreen
 import com.music.vivi.ui.screens.settings.SpotifyScreen
 import com.music.vivi.viewmodels.HomeViewModel
+import com.music.vivi.BuildConfig
 
 @OptIn(ExperimentalMaterial3Api::class)
 fun NavGraphBuilder.navigationBuilder(
@@ -433,47 +434,49 @@ fun NavGraphBuilder.navigationBuilder(
         SpotifyScreen(navController, scrollBehavior, viewModel)
     }
 
-    composable("settings/integrations") {
-        IntegrationScreen(navController, scrollBehavior)
-    }
+    if (BuildConfig.INTEGRATIONS_AVAILABLE) {
+        composable("settings/integrations") {
+            IntegrationScreen(navController, scrollBehavior)
+        }
 
-    composable("settings/integrations/discord") {
-        DiscordSettings(navController, scrollBehavior, snackbarHostState)
-    }
+        composable("settings/integrations/discord") {
+            DiscordSettings(navController, scrollBehavior, snackbarHostState)
+        }
 
-    composable("settings/integrations/lastfm") {
-        LastFMSettings(navController, scrollBehavior)
-    }
+        composable("settings/integrations/lastfm") {
+            LastFMSettings(navController, scrollBehavior)
+        }
 
-    composable("settings/integrations/spotify") {
-        val rootEntry = remember(it) { navController.getBackStackEntry(navController.graph.id) }
-        val viewModel: SpotifyViewModel = hiltViewModel(rootEntry)
-        SpotifyScreen(navController, scrollBehavior, viewModel)
-    }
+        composable("settings/integrations/spotify") {
+            val rootEntry = remember(it) { navController.getBackStackEntry(navController.graph.id) }
+            val viewModel: SpotifyViewModel = hiltViewModel(rootEntry)
+            SpotifyScreen(navController, scrollBehavior, viewModel)
+        }
 
-    composable("settings/integrations/spotify/login") {
-        val rootEntry = remember(it) { navController.getBackStackEntry(navController.graph.id) }
-        val viewModel: SpotifyViewModel = hiltViewModel(rootEntry)
-        SpotifyLoginScreen(
-            navController = navController,
-            onCookiesCaptured = { spDc, spKey ->
-                viewModel.connectWithCookies(spDc, spKey)
-            }
-        )
-    }
+        composable("settings/integrations/spotify/login") {
+            val rootEntry = remember(it) { navController.getBackStackEntry(navController.graph.id) }
+            val viewModel: SpotifyViewModel = hiltViewModel(rootEntry)
+            SpotifyLoginScreen(
+                navController = navController,
+                onCookiesCaptured = { spDc, spKey ->
+                    viewModel.connectWithCookies(spDc, spKey)
+                }
+            )
+        }
 
-    composable("settings/integrations/spotify/playlists") {
-        val rootEntry = remember(it) { navController.getBackStackEntry(navController.graph.id) }
-        val viewModel: SpotifyViewModel = hiltViewModel(rootEntry)
-        SpotifyPlaylistScreen(navController, viewModel)
+        composable("settings/integrations/spotify/playlists") {
+            val rootEntry = remember(it) { navController.getBackStackEntry(navController.graph.id) }
+            val viewModel: SpotifyViewModel = hiltViewModel(rootEntry)
+            SpotifyPlaylistScreen(navController, viewModel)
+        }
+
+        composable("settings/discord/login") {
+            DiscordLoginScreen(navController)
+        }
     }
 
     composable(route = "settings/integrations/listen_together") {
         ListenTogetherSettings(navController, scrollBehavior)
-    }
-
-    composable("settings/discord/login") {
-        DiscordLoginScreen(navController)
     }
 
     composable("settings/about") {
