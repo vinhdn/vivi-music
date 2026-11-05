@@ -50,7 +50,7 @@ android {
         buildConfigField("Boolean", "IS_NIGHTLY", isNightly.toString())
     }
 
-    flavorDimensions += listOf("abi", "variant")
+    flavorDimensions += listOf("abi", "variant", "edition")
     productFlavors {
         // FOSS variant (default) - F-Droid compatible, no Google Play Services
         create("foss") {
@@ -68,23 +68,57 @@ android {
         
         create("universal") {
             dimension = "abi"
+            isDefault = true
+            ndk {
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            }
             buildConfigField("String", "ARCHITECTURE", "\"universal\"")
         }
         create("arm64") {
             dimension = "abi"
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
             buildConfigField("String", "ARCHITECTURE", "\"arm64\"")
         }
         create("armeabi") {
             dimension = "abi"
+            ndk {
+                abiFilters += "armeabi-v7a"
+            }
             buildConfigField("String", "ARCHITECTURE", "\"armeabi\"")
         }
         create("x86") {
             dimension = "abi"
+            ndk {
+                abiFilters += "x86"
+            }
             buildConfigField("String", "ARCHITECTURE", "\"x86\"")
         }
         create("x86_64") {
             dimension = "abi"
+            ndk {
+                abiFilters += "x86_64"
+            }
             buildConfigField("String", "ARCHITECTURE", "\"x86_64\"")
+        }
+
+        // Full edition (default) - includes the Kuromoji Japanese tokenizer for
+        // accurate romanization of Japanese lyrics (adds ~33 MB of dictionary data).
+        create("full") {
+            dimension = "edition"
+            isDefault = true
+            buildConfigField("Boolean", "KUROMOJI_AVAILABLE", "true")
+            buildConfigField("Boolean", "INTEGRATIONS_AVAILABLE", "true")
+        }
+
+        // Tiny edition - drops Kuromoji for a much smaller, lighter build. Japanese
+        // lyrics fall back to the original text instead of romaji. Also drops the
+        // third-party integrations (Discord, Last.fm, Spotify) - YouTube Music only.
+        create("tiny") {
+            dimension = "edition"
+            buildConfigField("Boolean", "KUROMOJI_AVAILABLE", "false")
+            buildConfigField("Boolean", "INTEGRATIONS_AVAILABLE", "false")
         }
     }
 
@@ -272,7 +306,9 @@ dependencies {
     "gmsImplementation"(libs.cast.framework)
 
     implementation(libs.room.runtime)
-    implementation(libs.kuromoji.ipadic)
+    // Kuromoji is only bundled in the "full" edition; the "tiny" edition falls back
+    // to showing the original Japanese text (see JapaneseTokenizer per source set).
+    "fullImplementation"(libs.kuromoji.ipadic)
     implementation(libs.tinypinyin)
     ksp(libs.room.compiler)
     implementation(libs.room.ktx)

@@ -6,7 +6,6 @@
 package com.music.vivi.lyrics
 
 import android.text.format.DateUtils
-import com.atilika.kuromoji.ipadic.Tokenizer
 import com.github.promeg.pinyinhelper.Pinyin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -314,11 +313,6 @@ object LyricsUtils {
     private val MACEDONIAN_SPECIFIC_CYRILLIC_LETTERS = setOf(
         "Ѓ", "ѓ", "Ѕ", "ѕ", "Ќ", "ќ"
     )
-
-    // Lazy initialized Tokenizer
-    private val kuromojiTokenizer: Tokenizer by lazy {
-        Tokenizer()
-    }
 
     private val HEX_ENTITY_REGEX = "&#x([0-9a-fA-F]+);".toRegex()
     private val DEC_ENTITY_REGEX = "&#(\\d+);".toRegex()
@@ -717,19 +711,11 @@ object LyricsUtils {
     }
 
     suspend fun romanizeJapanese(text: String): String = withContext(Dispatchers.Default) {
-        val tokens = kuromojiTokenizer.tokenize(text)
-        val romanizedTokens = tokens.mapIndexed { index, token ->
-            val currentReading = if (token.reading.isNullOrEmpty() || token.reading == "*") {
-                token.surface
-            } else {
-                token.reading
-            }
-            val nextTokenReading = if (index + 1 < tokens.size) {
-                tokens[index + 1].reading?.takeIf { it.isNotEmpty() && it != "*" } ?: tokens[index + 1].surface
-            } else {
-                null
-            }
-            katakanaToRomaji(currentReading, nextTokenReading)
+        val readings = JapaneseTokenizer.tokenizeReadings(text)
+        if (readings.isEmpty()) return@withContext text
+        val romanizedTokens = readings.mapIndexed { index, reading ->
+            val nextTokenReading = readings.getOrNull(index + 1)
+            katakanaToRomaji(reading, nextTokenReading)
         }
         romanizedTokens.joinToString(" ")
     }
